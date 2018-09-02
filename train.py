@@ -28,8 +28,7 @@ if __name__ == '__main__':
                                   'agent_2': (PGPolicyGraph, obs_space, act_space, {"gamma": 0.99}),
                                   'agent_3': (PGPolicyGraph, obs_space, act_space, {"gamma": 0.99}),
                               },
-                              'policy_mapping_fn':
-                              lambda agent_id: agent_id
+                              'policy_mapping_fn': lambda agent_id: agent_id
                           },
                           'env_config': env_config
                       })

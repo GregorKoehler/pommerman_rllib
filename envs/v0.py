@@ -6,7 +6,6 @@ from pommerman.configs import team_competition_env
 from pommerman.agents import SimpleAgent, RandomAgent, PlayerAgent, BaseAgent
 from ray.rllib.env.multi_agent_env import MultiAgentEnv
 
-
 # constants
 NUM_PLAYERS = 4
 AGENT_IDS = ['agent_0', 'agent_1', 'agent_2', 'agent_3']
@@ -95,9 +94,10 @@ class Pomme_v0(MultiAgentEnv):
             obs (dict): New observations for each ready agent.
         """
         obs_list = self.pomme.reset()
-        return to_dict(obs_list)
+        return {key: featurize(val) for key, val in to_dict(obs_list).items()}
 
     def step(self, action_dict):
+        print(action_dict)
         """Returns observations from ready agents.
         The returns are dicts mapping from agent_name strings to values. The
         number of agents in the env can vary over time.
@@ -110,10 +110,16 @@ class Pomme_v0(MultiAgentEnv):
                 "__all__" is used to indicate env termination.
             infos (dict): Info values for each ready agent.
         """
-        obs, rewards, done, info = self.pomme.step(list(action_dict.values()))
+        actions = {'agent_0': 0, 'agent_1': 0, 'agent_2': 0, 'agent_3': 0}
+        actions.update(action_dict)
+        obs, rewards, done, info = self.pomme.step(list(actions.values()))
+        obs_dict = {key: featurize(val) for key, val in to_dict(obs).items()}
         dones = {'__all__': done}
         dones.update(to_dict([not agent.is_alive for agent in self.pomme._agents]))
-        return to_dict(obs), to_dict(rewards), dones, info
+        print(dones)
+        print(info)
+        infos = {AGENT_IDS[i]:{info_k: info_v for info_k, info_v in info.items()} for i in range(NUM_PLAYERS)}
+        return obs_dict, to_dict(rewards), dones, infos
 
 
 if __name__ == '__main__':
