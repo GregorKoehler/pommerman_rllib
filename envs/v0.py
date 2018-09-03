@@ -1,9 +1,8 @@
 import numpy as np
 
 from pommerman.envs.v0 import Pomme
-from pommerman.configs import ffa_competition_env
-from pommerman.configs import team_competition_env
-from pommerman.agents import SimpleAgent, RandomAgent, PlayerAgent, BaseAgent
+from pommerman import configs as pommerman_cfg
+from pommerman import agents
 from ray.rllib.env.multi_agent_env import MultiAgentEnv
 
 # constants
@@ -17,9 +16,15 @@ def to_dict(list):
     return {AGENT_IDS[i]: list[i] for i in range(NUM_PLAYERS)}
 
 def make_np_float(feature):
+    '''
+    Return given feature as numpy array.
+    '''
     return np.array(feature).astype(np.float32)
 
 def featurize(obs):
+    '''
+    Turn board observations (dict) into a feature vector (numpy array).
+    '''
     board = obs["board"].reshape(-1).astype(np.float32)
     bomb_blast_strength = obs["bomb_blast_strength"].reshape(-1).astype(np.float32)
     bomb_life = obs["bomb_life"].reshape(-1).astype(np.float32)
@@ -43,53 +48,39 @@ def featurize(obs):
 
     features = np.concatenate(
         (board, bomb_blast_strength, bomb_life, position, ammo, blast_strength, can_kick, teammate, enemies))
-    return features  # np.expand_dims(features, 1)
+    return features
 
 
 class Pomme_v0(MultiAgentEnv):
-    """
-    An environment that hosts multiple independent agents.
-    Agents are identified by (string) agent ids. Note that these "agents" here
-    are not to be confused with RLlib agents.
+    '''
+    A wrapped Pommerman v0 environment for usage with Ray RLlib. The v0 environment is the base environment used in
+    the NIPS'18 competition. Contrary to v1 it doesn't collapse walls and also doesn't allow for radio communication
+    between agents (as does v2).
 
-    Examples:
-    env = MyMultiAgentEnv()
-    obs = env.reset()
-    print(obs)
-    {
-        "car_0": [2.4, 1.6],
-        "car_1": [3.4, -3.2],
-        "traffic_light_1": [0, 3, 5, 1],
-    }
-    obs, rewards, dones, infos = env.step(
-        action_dict={
-            "car_0": 1, "car_1": 0, "traffic_light_1": 2,
-        })
-    print(rewards)
-    {
-        "car_0": 3,
-        "car_1": -1,
-        "traffic_light_1": 0,
-    }
-    print(dones)
-    {
-        "car_0": False,
-        "car_1": True,
-        "__all__": False,
-    }
-    """
-    def __init__(self, config=team_competition_env()):
+    Agents are identified by (string) agent IDs: `AGENT_IDS`
+    (Note that these "agents" here are not to be confused with RLlib agents.)
+    '''
+    def __init__(self, config=pommerman_cfg.team_competition_env()):
+        '''
+        Initializes the Pommerman environment and adds Dummy Agents as expected by `Pomme`.
+
+        Args:
+            config (dict): A config defining the game mode. Options include FFA mode, team (2v2) and team radio (2v2).
+            See pommerman's config.py and docs for more details.
+        '''
         self.pomme = Pomme(**config['env_kwargs'])
         self.agent_names = AGENT_IDS
         agent_list = []
         for i in range(4):
             agent_id = i
-            agent_list.append(BaseAgent(config["agent"](agent_id, config["game_type"])))
+            agent_list.append(agents.BaseAgent(config["agent"](agent_id, config["game_type"])))
         self.pomme.set_agents(agent_list)
         self.pomme.set_init_game_state(None)
 
     def reset(self):
-        """Resets the env and returns observations from ready agents.
+        """
+        Resets the env and returns observations from ready agents.
+
         Returns:
             obs (dict): New observations for each ready agent.
         """
@@ -97,27 +88,33 @@ class Pomme_v0(MultiAgentEnv):
         return {key: featurize(val) for key, val in to_dict(obs_list).items()}
 
     def step(self, action_dict):
-        print(action_dict)
-        """Returns observations from ready agents.
-        The returns are dicts mapping from agent_name strings to values. The
-        number of agents in the env can vary over time.
-        Returns
-        -------
+        """
+        Returns observations from ready agents.
+        The returns are dicts mapping from agent_id strings to values. The number of agents in the env can vary over
+        time.
+
+        Returns:
             obs (dict): New observations for each ready agent.
-            rewards (dict): Reward values for each ready agent. If the
-                episode is just started, the value will be None.
-            dones (dict): Done values for each ready agent. The special key
-                "__all__" is used to indicate env termination.
+            rewards (dict): Reward values for each ready agent. If the episode is just started, the value will be zero.
+            dones (dict): Done values for each ready agent. The key "__all__" is used to indicate the end of the game.
             infos (dict): Info values for each ready agent.
         """
+        # default actions since Pommerman env expects actions even if agent is dead
         actions = {'agent_0': 0, 'agent_1': 0, 'agent_2': 0, 'agent_3': 0}
+        # update actions with the ones returned from the policies
         actions.update(action_dict)
+        # perform env step (expects a list)
         obs, rewards, done, info = self.pomme.step(list(actions.values()))
+        # to return featurized observations for each agent ID
         obs_dict = {key: featurize(val) for key, val in to_dict(obs).items()}
+        # build 'dones' dictionary, key __all__ indicates env termination
         dones = {'__all__': done}
-        dones.update(to_dict([not agent.is_alive for agent in self.pomme._agents]))
-        print(dones)
-        print(info)
+        # fetch all
+        done_agents = to_dict([not agent.is_alive for agent in self.pomme._agents])
+        # filter done dictionary to only return agents which are still alive
+        # -> apparently this is how rllib determines when agents "die"
+        dones.update({key: val for key, val in done_agents.items() if not val})
+        # turn info dict into dictionary with agent IDs as keys
         infos = {AGENT_IDS[i]:{info_k: info_v for info_k, info_v in info.items()} for i in range(NUM_PLAYERS)}
         return obs_dict, to_dict(rewards), dones, infos
 

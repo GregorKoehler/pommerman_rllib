@@ -1,6 +1,5 @@
-# `pommerman_rllib`
-A Pommerman Multi-Agent Reinforcement Learning Environment wrapped using RLlib's `MultiAgentEnv`.
+# `pommerman_rllib` - w.i.p.
 
-### TODOs
-* [x] implement v0.step()
-* [x] enable using different configs, [ ] for each env version
+A wrapper for the Pommerman Multi-Agent Reinforcement Learning Environment
+based on RLlib's `MultiAgentEnv`.  
+This is work in progress so use with care.
