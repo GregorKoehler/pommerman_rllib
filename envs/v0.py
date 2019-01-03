@@ -1,5 +1,3 @@
-import numpy as np
-
 from pommerman.envs.v0 import Pomme
 from pommerman import configs as pommerman_cfg
 from pommerman import agents
@@ -14,41 +12,6 @@ def to_dict(list):
     Turn list values into dictionary where keys are the agent IDs.
     '''
     return {AGENT_IDS[i]: list[i] for i in range(NUM_PLAYERS)}
-
-def make_np_float(feature):
-    '''
-    Return given feature as numpy array.
-    '''
-    return np.array(feature).astype(np.float32)
-
-def featurize(obs):
-    '''
-    Turn board observations (dict) into a feature vector (numpy array).
-    '''
-    board = obs["board"].reshape(-1).astype(np.float32)
-    bomb_blast_strength = obs["bomb_blast_strength"].reshape(-1).astype(np.float32)
-    bomb_life = obs["bomb_life"].reshape(-1).astype(np.float32)
-    position = make_np_float(obs["position"])
-    ammo = make_np_float([obs["ammo"]])
-    blast_strength = make_np_float([obs["blast_strength"]])
-    can_kick = make_np_float([obs["can_kick"]])
-
-    teammate = obs["teammate"]
-    if teammate is not None:
-        teammate = teammate.value
-    else:
-        teammate = -1
-    teammate = make_np_float([teammate])
-
-    enemies = obs["enemies"]
-    enemies = [e.value for e in enemies]
-    if len(enemies) < 3:
-        enemies = enemies + [-1] * (3 - len(enemies))
-    enemies = make_np_float(enemies)
-
-    features = np.concatenate(
-        (board, bomb_blast_strength, bomb_life, position, ammo, blast_strength, can_kick, teammate, enemies))
-    return features
 
 
 class Pomme_v0(MultiAgentEnv):
@@ -69,6 +32,8 @@ class Pomme_v0(MultiAgentEnv):
             See pommerman's config.py and docs for more details.
         '''
         self.pomme = Pomme(**config['env_kwargs'])
+        self.observation_space = dict
+        self.action_space = self.pomme.action_space
         self.agent_names = AGENT_IDS
         agent_list = []
         for i in range(4):
@@ -85,7 +50,8 @@ class Pomme_v0(MultiAgentEnv):
             obs (dict): New observations for each ready agent.
         """
         obs_list = self.pomme.reset()
-        return {key: featurize(val) for key, val in to_dict(obs_list).items()}
+        #return {key: featurize(val) for key, val in to_dict(obs_list).items()}
+        return {key: val for key, val in to_dict(obs_list).items()}
 
     def step(self, action_dict):
         """
@@ -105,8 +71,6 @@ class Pomme_v0(MultiAgentEnv):
         actions.update(action_dict)
         # perform env step (expects a list)
         obs, rewards, done, info = self.pomme.step(list(actions.values()))
-        # to return featurized observations for each agent ID
-        obs_dict = {key: featurize(val) for key, val in to_dict(obs).items()}
         # build 'dones' dictionary, key __all__ indicates env termination
         dones = {'__all__': done}
         # fetch all
@@ -116,7 +80,7 @@ class Pomme_v0(MultiAgentEnv):
         dones.update({key: val for key, val in done_agents.items() if not val})
         # turn info dict into dictionary with agent IDs as keys
         infos = {AGENT_IDS[i]:{info_k: info_v for info_k, info_v in info.items()} for i in range(NUM_PLAYERS)}
-        return obs_dict, to_dict(rewards), dones, infos
+        return to_dict(obs), to_dict(rewards), dones, infos
 
 
 if __name__ == '__main__':
