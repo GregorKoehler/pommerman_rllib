@@ -14,4 +14,9 @@ since this release allows for Dict observation spaces.
 Earlier releases than [Pommerman](https://github.com/MultiAgentLearning/playground)
 `0.2.0` might work, but it's recommended to use `pommerman>=0.2.0`.    
 
+## Usage
+For a simple example of how to use this wrapped environment along with the custom 
+preprocessor please refer to `train_example.py`. This example uses a policy gradient 
+trainer to train four different policy gradient agents in one environment.  
+
 This is work in progress so use with care.
